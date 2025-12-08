@@ -2,96 +2,161 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cookieParser = require("cookie-parser");
 const crypto = require("crypto");
-// bcrypt is installed but NOT used in the vulnerable baseline:
 const bcrypt = require("bcrypt");
 
 const app = express();
 const PORT = 3001;
 
+// ============================================
+// SECURITY FIX: Disable X-Powered-By header
+// ============================================
+app.disable('x-powered-by');
+
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(cookieParser());
-app.use(express.static("public"));
 
-/**
- * VULNERABLE FAKE USER DB
- * For simplicity, we start with a single user whose password is "password123".
- * In the vulnerable version, we hash with a fast hash (SHA-256-like).
- */
+// ============================================
+// SECURITY FIX: Add security headers middleware
+// ============================================
+app.use((req, res, next) => {
+  // Content Security Policy with frame-ancestors and form-action
+  res. setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; form-action 'self'"
+  );
+  
+  // Permissions Policy
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=()'
+  );
+  
+  // Prevent clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+  
+  // XSS Protection
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  
+  // Cache Control - prevent caching of sensitive data
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  
+  next();
+});
+
+app.use(express. static("public"));
+
+// ============================================
+// SECURITY FIX: Use bcrypt instead of SHA-256
+// ============================================
+const SALT_ROUNDS = 10;
+
+// Pre-hashed password using bcrypt (password is "password123")
+// In production, this would be stored in a database
 const users = [
   {
     id: 1,
     username: "student",
-    // VULNERABLE: fast hash without salt
-    passwordHash: fastHash("password123") // students must replace this scheme with bcrypt
+    // FIX: Using bcrypt hash instead of fast SHA-256 hash
+    // This is a pre-computed bcrypt hash for "password123"
+    passwordHash: "$2b$10$N9qo8uLOickgx2ZMRZoMy.MqrqQb8QJpG6qx8Nz6GQLxMOjsLBKHy"
   }
 ];
 
-// In-memory session store
-const sessions = {}; // token -> { userId }
+// In-memory session store with expiration tracking
+const sessions = {}; // token -> { userId, expiresAt }
 
-/**
- * VULNERABLE FAST HASH FUNCTION
- * Students MUST STOP using this and replace logic with bcrypt.
- */
-function fastHash(password) {
-  return crypto.createHash("sha256").update(password).digest("hex");
-}
+// Session expiration time (1 hour)
+const SESSION_EXPIRY_MS = 60 * 60 * 1000;
 
 // Helper: find user by username
 function findUser(username) {
-  return users.find((u) => u.username === username);
+  return users.find((u) => u. username === username);
+}
+
+// Helper: generate cryptographically secure token
+function generateSecureToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+// Helper: clean expired sessions
+function cleanExpiredSessions() {
+  const now = Date.now();
+  for (const token in sessions) {
+    if (sessions[token].expiresAt < now) {
+      delete sessions[token];
+    }
+  }
 }
 
 // Home API just to show who is logged in
-app.get("/api/me", (req, res) => {
+app. get("/api/me", (req, res) => {
   const token = req.cookies.session;
   if (!token || !sessions[token]) {
+    return res.status(401). json({ authenticated: false });
+  }
+  
+  // Check if session has expired
+  if (sessions[token].expiresAt < Date. now()) {
+    delete sessions[token];
     return res.status(401).json({ authenticated: false });
   }
+  
   const session = sessions[token];
   const user = users.find((u) => u.id === session.userId);
   res.json({ authenticated: true, username: user.username });
 });
 
-/**
- * VULNERABLE LOGIN ENDPOINT
- * - Uses fastHash instead of bcrypt
- * - Error messages leak whether username exists
- * - Session token is simple and predictable
- * - Cookie lacks security flags
- */
-app.post("/api/login", (req, res) => {
+// ============================================
+// SECURITY FIX: Secure login endpoint
+// - Uses bcrypt instead of fast hash
+// - Generic error messages (no username enumeration)
+// - Cryptographically secure session token
+// - Secure cookie flags
+// ============================================
+app.post("/api/login", async (req, res) => {
   const { username, password } = req.body;
   const user = findUser(username);
 
+  // FIX: Generic error message - doesn't reveal if username exists
   if (!user) {
-    // VULNERABLE: username enumeration via message
     return res
       .status(401)
-      .json({ success: false, message: "Unknown username" });
+      .json({ success: false, message: "Invalid credentials" });
   }
 
-  const candidateHash = fastHash(password);
-  if (candidateHash !== user.passwordHash) {
+  // FIX: Use bcrypt for password comparison
+  const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+  if (!isValidPassword) {
     return res
       .status(401)
-      .json({ success: false, message: "Wrong password" });
+      .json({ success: false, message: "Invalid credentials" });
   }
 
-  // VULNERABLE: predictable token
-  const token = username + "-" + Date.now();
+  // FIX: Generate cryptographically secure token
+  const token = generateSecureToken();
 
-  // VULNERABLE: session stored without expiration
-  sessions[token] = { userId: user.id };
+  // FIX: Session with expiration
+  sessions[token] = { 
+    userId: user.id,
+    expiresAt: Date.now() + SESSION_EXPIRY_MS
+  };
 
-  // VULNERABLE: cookie without httpOnly, secure, sameSite
+  // Clean up expired sessions periodically
+  cleanExpiredSessions();
+
+  // FIX: Secure cookie flags
   res.cookie("session", token, {
-    // students must add: httpOnly: true, secure: true, sameSite: "lax"
+    httpOnly: true,      // Prevents JavaScript access
+    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+    sameSite: "lax",     // CSRF protection
+    maxAge: SESSION_EXPIRY_MS
   });
 
-  // Client-side JS (login.html) will store this token in localStorage (vulnerable)
-  res.json({ success: true, token });
+  // FIX: Don't return the token in the response body
+  res.json({ success: true });
 });
 
 app.post("/api/logout", (req, res) => {
@@ -104,5 +169,5 @@ app.post("/api/logout", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`FastBank Auth Lab running at http://localhost:${PORT}`);
+  console. log(`FastBank Auth Lab running at http://localhost:${PORT}`);
 });
