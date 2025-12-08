@@ -2,7 +2,7 @@ name: SAST - FastBank Auth Lab
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - 'fastbank-auth-lab/**'
   pull_request:
@@ -37,8 +37,8 @@ jobs:
           semgrep \
             --config p/owasp-top-ten \
             --config p/nodejs \
-            --error \
             --sarif --output semgrep-fastbank-auth.sarif \
+            --error \
             fastbank-auth-lab/
 
       - name: Upload SARIF to GitHub Security tab
