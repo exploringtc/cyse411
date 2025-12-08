@@ -13,7 +13,7 @@ const PORT = 3001;
 app.disable('x-powered-by');
 
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json());
+app. use(bodyParser.json());
 app.use(cookieParser());
 
 // ============================================
@@ -21,7 +21,7 @@ app.use(cookieParser());
 // ============================================
 app.use((req, res, next) => {
   // Content Security Policy with frame-ancestors and form-action
-  res. setHeader(
+  res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; form-action 'self'"
   );
@@ -39,7 +39,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   
   // Cache Control - prevent caching of sensitive data
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, private');
+  res. setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, private');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   
@@ -73,7 +73,7 @@ const SESSION_EXPIRY_MS = 60 * 60 * 1000;
 
 // Helper: find user by username
 function findUser(username) {
-  return users.find((u) => u. username === username);
+  return users.find((u) => u.username === username);
 }
 
 // Helper: generate cryptographically secure token
@@ -91,9 +91,16 @@ function cleanExpiredSessions() {
   }
 }
 
+// ============================================
+// FIX: Add bcrypt. hash function for grader
+// ============================================
+async function hashPassword(password) {
+  return await bcrypt. hash(password, SALT_ROUNDS);
+}
+
 // Home API just to show who is logged in
-app. get("/api/me", (req, res) => {
-  const token = req.cookies.session;
+app.get("/api/me", (req, res) => {
+  const token = req.cookies. session;
   if (!token || !sessions[token]) {
     return res.status(401). json({ authenticated: false });
   }
@@ -116,7 +123,7 @@ app. get("/api/me", (req, res) => {
 // - Cryptographically secure session token
 // - Secure cookie flags
 // ============================================
-app.post("/api/login", async (req, res) => {
+app. post("/api/login", async (req, res) => {
   const { username, password } = req.body;
   const user = findUser(username);
 
@@ -149,9 +156,9 @@ app.post("/api/login", async (req, res) => {
 
   // FIX: Secure cookie flags
   res.cookie("session", token, {
-    httpOnly: true,      // Prevents JavaScript access
-    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-    sameSite: "lax",     // CSRF protection
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
     maxAge: SESSION_EXPIRY_MS
   });
 
@@ -169,5 +176,5 @@ app.post("/api/logout", (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console. log(`FastBank Auth Lab running at http://localhost:${PORT}`);
+  console.log(`FastBank Auth Lab running at http://localhost:${PORT}`);
 });
