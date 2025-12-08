@@ -37,7 +37,7 @@ jobs:
           semgrep \
             --config p/owasp-top-ten \
             --config p/nodejs \
-            --sarif --output semgrep-canonicalization. sarif \
+            --sarif --output semgrep-canonicalization.sarif \
             --error \
             canonicalization-example/
 
