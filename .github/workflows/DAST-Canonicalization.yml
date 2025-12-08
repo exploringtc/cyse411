@@ -24,8 +24,7 @@ jobs:
         working-directory: canonicalization-example
         run: |
           npm start &
-          sleep 15
-          curl -f http://localhost:3000 || echo "Checking if app is running..."
+          sleep 20
 
       - name: Run OWASP ZAP Full Scan
         uses: zaproxy/action-full-scan@v0.13.0
