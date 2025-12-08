@@ -28,7 +28,7 @@ jobs:
           curl -f http://localhost:3000 || echo "Checking if app is running..."
 
       - name: Run OWASP ZAP Full Scan
-        uses: zaproxy/action-full-scan@v0.13. 0
+        uses: zaproxy/action-full-scan@v0.13.0
         with:
           target: 'http://localhost:3000'
           fail_action: true
