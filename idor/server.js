@@ -1,7 +1,42 @@
 const express = require("express");
 const app = express();
 
-app.use(express.json());
+// ============================================
+// SECURITY FIX: Disable X-Powered-By header
+// ============================================
+app.disable('x-powered-by');
+
+app.use(express. json());
+
+// ============================================
+// SECURITY FIX: Add security headers middleware
+// ============================================
+app.use((req, res, next) => {
+  // Content Security Policy with frame-ancestors and form-action
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; form-action 'self'"
+  );
+  
+  // Permissions Policy
+  res. setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=()'
+  );
+  
+  // Prevent clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+  
+  // XSS Protection
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  
+  // Cache Control - prevent caching of sensitive data
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  
+  next();
+});
 
 // Fake "database"
 const users = [
@@ -24,33 +59,38 @@ function fakeAuth(req, res, next) {
   const idHeader = req.header("X-User-Id");
   const id = idHeader ? parseInt(idHeader, 10) : null;
 
-  const user = users.find((u) => u.id === id);
+  const user = users.find((u) => u. id === id);
   if (!user) {
-    return res.status(401).json({ error: "Unauthenticated: set X-User-Id" });
+    return res. status(401).json({ error: "Unauthenticated: set X-User-Id" });
   }
 
   // Attach authenticated user to the request
-  req.user = user;
+  req. user = user;
   next();
 }
 
 // Apply fakeAuth to all routes below this line
 app.use(fakeAuth);
 
-// VULNERABLE endpoint: no ownership check (IDOR)
+// ============================================
+// SECURITY FIX: Previously vulnerable endpoint - now secured
+// Fixed IDOR vulnerability by adding ownership check
+// ============================================
 app.get("/orders/:id", (req, res) => {
-  const orderId = parseInt(req.params.id, 10);
+  const orderId = parseInt(req.params. id, 10);
 
   const order = orders.find((o) => o.id === orderId);
-  if (!order) {
+  if (! order) {
     return res.status(404).json({ error: "Order not found" });
   }
 
-  // BUG: no check that order.userId === req.user.id
+  // FIX: Check that the order belongs to the authenticated user
+  if (order.userId !== req. user.id) {
+    return res. status(403).json({ error: "Access denied: You don't own this order" });
+  }
+
   return res.json(order);
 });
-
-
 
 // Health check
 app.get("/", (req, res) => {
@@ -59,6 +99,6 @@ app.get("/", (req, res) => {
 
 // Start server
 const PORT = 3000;
-app.listen(PORT, () => {
+app. listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
