@@ -2,7 +2,7 @@ name: SAST - IDOR Example
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - 'idor/**'
   pull_request:
@@ -25,7 +25,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3. x'
 
       - name: Install Semgrep
         run: |
@@ -37,8 +37,8 @@ jobs:
           semgrep \
             --config p/owasp-top-ten \
             --config p/nodejs \
+            --sarif --output semgrep-idor. sarif \
             --error \
-            --sarif --output semgrep-idor.sarif \
             idor/
 
       - name: Upload SARIF to GitHub Security tab
